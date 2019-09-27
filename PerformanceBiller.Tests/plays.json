@@ -1,14 +1,17 @@
-{
-  "hamlet": {
+[
+  {
+    "id": "hamlet",
     "name": "Hamlet",
     "type": "tragedy"
   },
-  "as-like": {
+  {
+    "id": "as-like",
     "name": "As You Like It",
     "type": "comedy"
   },
-  "othello": {
+  {
+    "id": "othello",
     "name": "Othello",
     "type": "tragedy"
   }
-}
+]

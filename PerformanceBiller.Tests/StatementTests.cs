@@ -1,6 +1,10 @@
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using PerformanceBiller.Contracts;
+using PerformanceBiller.PlayCalculator;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using Xunit;
 
 namespace PerformanceBiller.Tests
@@ -17,20 +21,28 @@ namespace PerformanceBiller.Tests
                 "Amount owed is $1,730.00\n" +
                 "You earned 47 credits\n";
 
-            var statement = new Statement();
+            var comedyCalculator = new ComedyService();
+            var tragedyCalculator = new TragedyPlayCalculator();
+
+            var calculators = new List<IPlayCalculator>()
+            {
+                comedyCalculator,
+                tragedyCalculator
+            };
+
+            var statement = new Statement(calculators);
 
             using (var invoicesFile = File.OpenText("..\\..\\..\\invoices.json"))
-            using (var invoicesReader = new JsonTextReader(invoicesFile))
             using (var playsFile = File.OpenText("..\\..\\..\\plays.json"))
-            using (var playsReader = new JsonTextReader(playsFile)) {
-                var invoices = (JArray) JToken.ReadFrom(invoicesReader);
+            { 
+                var invoiceJson = invoicesFile.ReadToEnd(); ;
+                var invoices = JsonConvert.DeserializeObject<List<InvoiceContract>>(invoiceJson);
 
-                var invoice = (JObject) invoices.First;
+                var playsJson = playsFile.ReadToEnd();
+                var plays = JsonConvert.DeserializeObject<List<PlayContract>>(playsJson);
 
-                var plays = (JObject) JToken.ReadFrom(playsReader);
-
-                var actualResult = statement.Run(invoice, plays);
-
+                var actualResult = statement.Create(invoices.First(), plays);
+                
                 Assert.Equal(expectedOutput, actualResult);
             }
         }

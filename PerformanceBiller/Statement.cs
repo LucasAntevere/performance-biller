@@ -1,50 +1,63 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using PerformanceBiller.Contracts;
+using PerformanceBiller.PlayCalculator;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace PerformanceBiller
 {
     public class Statement
     {
-        public string Run(JObject invoice, JObject plays)
+        private List<IPlayCalculator> _calculateThemesService;
+
+        public Statement(List<IPlayCalculator> calculateThemesService)
         {
-            var totalAmount = 0;
-            var volumeCredits = 0;
-            var result = $"Statement for {invoice.GetValue("customer")}\n";
+            _calculateThemesService = calculateThemesService;
+        }
+
+        public string Create(InvoiceContract invoice, List<PlayContract> plays)
+        {
+            invoice.Amount = 0;
+            invoice.Credits = 0;
+
+            foreach (var performance in invoice.Performances)
+            {
+                var play = plays.First(x => x.Id == performance.PlayId);
+                performance.Amount = 0;
+                performance.Credits = 0;
+
+                var calculator = _calculateThemesService.FirstOrDefault(x => x.Type == play.Type);
+
+                if (calculator == null)
+                    throw new NotImplementedException($"unknown type: { play.Type}");
+
+                performance.Amount = calculator.CalculateAmount(performance.Audience);
+                performance.Credits = calculator.CalculateCredits(performance.Audience);
+
+                invoice.Amount += performance.Amount;
+                invoice.Credits += performance.Credits;
+            }
+
+            return FormatResult(invoice, plays);
+        }
+
+        private string FormatResult(InvoiceContract invoice, List<PlayContract> plays)
+        {
+            var result = $"Statement for {invoice.Customer}\n";
             var cultureInfo = new CultureInfo("en-US");
 
-            foreach (JObject perf in invoice.GetValue("performances")) {
-                var play = (JObject) plays.GetValue(perf.GetValue("playID").ToString());
-                var thisAmount = 0;
-                switch (play.GetValue("type").ToString()) {
-                    case "tragedy":
-                        thisAmount = 40000;
-                        if (Convert.ToInt32(perf.GetValue("audience")) > 30) {
-                            thisAmount += 1000 * (Convert.ToInt32(perf.GetValue("audience")) - 30);
-                        }
-                        break;
-                    case "comedy":
-                        thisAmount = 30000;
-                        if (Convert.ToInt32(perf.GetValue("audience")) > 20) {
-                            thisAmount += 10000 + 500 * (Convert.ToInt32(perf.GetValue("audience")) - 20);
-                        }
-                        thisAmount += 300 * Convert.ToInt32(perf.GetValue("audience"));
-                        break;
-                    default:
-                        throw new Exception($"unknown type: { play.GetValue("type").ToString()}");
-                }
-                // add volume credits
-                volumeCredits += Math.Max(Convert.ToInt32(perf.GetValue("audience")) - 30, 0);
-                // add extra credit for every ten comedy attendees
-                if ("comedy" == play.GetValue("type").ToString()) volumeCredits += Convert.ToInt32(perf.GetValue("audience")) / 5;
-                // print line for this order
-                result += $" {play.GetValue("name")}: {(thisAmount/100).ToString("C", cultureInfo)} ({perf.GetValue("audience")} seats)\n";
-                totalAmount += thisAmount;
-             }
-             result += $"Amount owed is {(totalAmount/100).ToString("C", cultureInfo)}\n";
-             result += $"You earned {volumeCredits} credits\n";
+            foreach (var performance in invoice.Performances)
+            {
+                var play = plays.First(x => x.Id == performance.PlayId);
 
-             return result;
+                result += $" {play.Name}: {(performance.Amount / 100).ToString("C", cultureInfo)} ({performance.Audience} seats)\n";
+            }
+
+            result += $"Amount owed is {(invoice.Amount / 100).ToString("C", cultureInfo)}\n";
+            result += $"You earned {invoice.Credits} credits\n";
+
+            return result;
         }
     }
 }
